@@ -1,0 +1,1446 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Judgement Apocalypse</title>
+
+<style>
+html,body{
+margin:0;
+padding:0;
+overflow:hidden;
+background:#000;
+touch-action:none; /* tránh rung khi kéo joystick */
+}
+
+canvas{
+display:block;
+position:fixed;
+top:0;
+left:0;
+}
+</style>
+
+</head>
+
+<body>
+
+<canvas id="c"></canvas>
+
+<script>
+
+// DÁN TOÀN BỘ CODE JS CỦA BẠN Ở ĐÂY
+
+// Ai to ma to ma to ma 2
+let c=document.getElementById("c");
+let x=c.getContext("2d");
+c.width=innerWidth;
+c.height=innerHeight;
+
+let state="select";
+let stage = 1;
+let selected=0;
+
+let airiImg=new Image();
+airiImg.src="https://i.ibb.co/FbJ31Yvv/image.png";
+
+let kuronaImg=new Image();
+kuronaImg.src="https://i.ibb.co/0pQ7qdMQ/image.png";
+
+let midorihaImg=new Image();
+midorihaImg.src="https://i.ibb.co/svJyhVZK/image.png";
+
+let kaizenImg = new Image();
+kaizenImg.src = "https://i.ibb.co/6RTXvP9x/image.png";
+
+let cloudImg = new Image();
+cloudImg.src = "https://i.ibb.co/9HKmV3k9/image.png";
+
+let yorukageImg = new Image();
+yorukageImg.src = "https://i.ibb.co/PvFh1sWq/image.png";
+
+let bossImg=new Image();
+bossImg.src="https://i.ibb.co/VWS48MBJ/image.png";
+
+let iceBossImg = new Image();
+iceBossImg.src="https://i.ibb.co/N2KzGczJ/image.png";
+
+let fireBossImg = new Image();
+fireBossImg.src = "https://i.ibb.co/8L1x7STR/image.png";
+
+let nuclearBossImg = new Image();
+nuclearBossImg.src = "https://i.ibb.co/S4W3Lvh3/image.png";
+
+let eyeImg = new Image();
+eyeImg.src = "https://i.ibb.co/d08qsBKT/image.png";
+
+let player={
+x:c.width/2,
+y:c.height-120,
+vy:0,
+vx: 0,
+jump:0,
+hp:10,
+maxHp: 10,
+r:15,
+speed:6
+};
+
+let boss={
+x:c.width/2,
+y:150,
+hp:200
+};
+
+let playerBullets=[];
+let rainBullets=[];
+let enemyBullets=[];
+let bounceBullets=[];
+let lasers=[];
+let fireBullets=[];
+let eyeBullets=[];
+let eyeCD = 30000;
+let stage4BallCD = 30000;
+
+let ball={
+x:0,
+y:0,
+dx:0,
+dy:0,
+active:false
+};
+
+let ballCD=0;
+let midorihaCD=0;
+let midorihaRegenTimer = 0;
+
+let kaizenCD = 0;
+let kaizenInvincible = false;
+let kaizenInvincibleTime = 0;
+
+let timeStop=false;
+let timeCD=0;
+let timeDuration=0;
+
+let sorayaFly = 0;
+let sorayaCD = 0;
+
+let yorukageDuration = 0;
+let yorukageRainTimer = 0;
+
+let spikeTimer=0;
+let spikeActive=false;
+let spikeWarning=0;
+let platforms=[];
+
+let laserCD = 10000;
+let spikeCD = 20000;
+
+let nuclearWarning = 0;
+let warningTimer = 0;
+
+let slowTimer = 0;
+
+let gravity=0.8;
+
+let joystick = {
+    active: false,
+    baseX: 180,
+    baseY: c.height - 180,
+    stickX: 180,
+    stickY: c.height - 180,
+    radius: 100
+};
+
+let moveX = 0;
+let moveY = 0;
+
+let shootTimer = 0;
+let laserDamageTimer = 0;
+let spikeDamageTimer = 0;
+
+
+
+// ================= INPUT =================
+
+c.addEventListener("pointermove", e => {
+
+if(!joystick.active) return;
+
+let tx = e.clientX;
+let ty = e.clientY;
+
+let dx = tx - joystick.baseX;
+let dy = ty - joystick.baseY;
+
+let dist = Math.hypot(dx, dy);
+
+if(dist > joystick.radius){
+    dx = dx / dist * joystick.radius;
+    dy = dy / dist * joystick.radius;
+}
+
+joystick.stickX = joystick.baseX + dx;
+joystick.stickY = joystick.baseY + dy;
+
+moveX = dx / joystick.radius;
+moveY = dy / joystick.radius;
+
+});
+
+c.addEventListener("pointerdown", e => {
+
+let tx = e.clientX;
+let ty = e.clientY;
+
+// SELECT
+
+if(state==="select"){
+
+// Airi
+if(tx < c.width*1/6){
+selected=1; player.maxHp=10; player.hp=10; player.r=10;
+}
+
+// Kurona
+else if(tx < c.width*2/6){
+selected=2; player.maxHp=10; player.hp=10; player.r=12;
+}
+
+// Midoriha
+else if(tx < c.width*3/6){
+selected=3; player.maxHp=10; player.hp=10; player.r=12;
+}
+
+// Kaizen
+else if(tx < c.width*4/6){
+selected=4; player.maxHp=15; player.hp=15; player.r=12;
+}
+
+// Soraya
+else if(tx < c.width*5/6){
+selected=5; player.maxHp=10; player.hp=10; player.r=12;
+}
+
+// Yorukage
+else{
+selected=6; player.maxHp=10; player.hp=10; player.r=12;
+}
+
+state="play";
+return;
+}
+
+// JOYSTICK
+let dist = Math.hypot(tx - joystick.baseX, ty - joystick.baseY);
+if(dist < joystick.radius){
+    joystick.active = true;
+}
+
+// SKILL BUTTON
+if(Math.hypot(tx-(c.width-120),ty-(c.height-120))<60){
+
+if(selected===1 && ballCD<=0){
+   let ang = Math.atan2(boss.y-player.y, boss.x-player.x);
+   ball.x = player.x;
+   ball.y = player.y;
+   ball.dx = Math.cos(ang) * 10;
+   ball.dy = Math.sin(ang) * 10;
+   ball.active = true;
+   ballCD = 8000;
+}
+
+if(selected===2 && timeCD<=0){
+   timeStop = true;
+   timeDuration = 1000;
+   timeCD = 10000;
+}
+
+if(selected===3 && midorihaCD<=0){
+   player.hp += 2;
+   if(player.hp > player.maxHp) player.hp = player.maxHp;
+   midorihaCD = 30000;
+}
+
+if(selected===4 && kaizenCD<=0){
+   kaizenInvincible = true;
+   kaizenInvincibleTime = 3000;
+   kaizenCD = 15000;
+}
+
+if(selected===5 && sorayaCD<=0){
+   sorayaFly = 3000;
+   sorayaCD = 10000;
+
+}
+
+if(selected===6 && sorayaCD<=0){
+
+platforms = [];
+yorukageDuration = 5000;
+yorukageRainTimer = 0;   // thêm dòng này
+
+sorayaCD = 10000;
+
+}
+
+}
+
+});
+
+c.addEventListener("pointerup", () => {
+
+joystick.active = false;
+
+joystick.stickX = joystick.baseX;
+joystick.stickY = joystick.baseY;
+
+moveX = 0;
+moveY = 0;
+
+player.vx = 0;   // dừng ngay lập tức
+
+});
+
+
+
+
+
+
+
+
+
+
+// ================= BOSS ATTACKS =================
+
+// NORMAL / SLOW SHOTS
+
+setInterval(()=>{
+
+if(state!=="play" || timeStop) return;
+
+// STAGE 1
+if(stage===1){
+
+for(let i=0;i<2;i++){
+enemyBullets.push({
+x:boss.x,
+y:boss.y,
+dx:(Math.random()-0.5)*6,
+dy:4,
+slow:true
+});
+}
+
+}
+
+// NORMAL SHOT
+
+else if(stage===2){
+
+for(let i=0;i<2;i++){   // stage 2 bắn ít
+enemyBullets.push({
+x:boss.x,
+y:boss.y,
+dx:(Math.random()-0.5)*8,
+dy:6,
+burn:true
+});
+}
+
+}
+
+else if(stage===3){
+
+for(let i=0;i<4;i++){   // stage 3 bắn nhiều hơn
+enemyBullets.push({
+x:boss.x,
+y:boss.y,
+dx:(Math.random()-0.5)*8,
+dy:6,
+burn:false
+});
+}
+
+}
+
+},800);
+
+// RAIN (nhiều hơn)
+
+setInterval(()=>{
+if(state!=="play" || timeStop) return;
+
+for(let i=0;i<4;i++){
+rainBullets.push({
+x:Math.random()*c.width,
+y:-10,
+dy:7+Math.random()*3
+});
+}
+
+},600);
+
+// SIDE BLIZZARD (đạn ập từ 2 bên dày)
+
+let blizzardCD = 10000;
+let blizzardWaves = 0;
+
+setInterval(()=>{
+
+if(state!=="play" || timeStop || stage!==1) return;
+
+// nếu đang trong chuỗi bão đạn
+if(blizzardWaves > 0){
+
+for(let i=0;i<3;i++){
+
+// từ trái
+enemyBullets.push({
+x:-20,
+y:Math.random()*c.height,
+dx:7,
+dy:0,
+blizzard:true
+});
+
+// từ phải
+enemyBullets.push({
+x:c.width+20,
+y:Math.random()*c.height,
+dx:-7,
+dy:0,
+blizzard:true
+});
+
+}
+
+blizzardWaves--;
+
+}
+
+},200);
+
+
+// kích hoạt mỗi 10 giây
+setInterval(()=>{
+
+if(state!=="play" || timeStop || stage!==1) return;
+
+blizzardWaves = 4;
+
+},10000);
+
+// BOUNCE (nhiều hơn)
+
+setInterval(()=>{
+if(state!=="play" || timeStop || stage!==3) return;
+
+for(let i=0;i<2;i++){
+bounceBullets.push({
+x:boss.x,
+y:boss.y,
+dx:(Math.random()-0.5)*9,
+dy:7
+});
+}
+
+},1500);
+
+setInterval(()=>{
+
+// BURN
+if(state!=="play" || timeStop || stage!==2) return;
+
+for(let i=0;i<6;i++){
+
+let ang = Math.random()*Math.PI*2;
+
+fireBullets.push({
+x:boss.x,
+y:boss.y,
+dx:Math.cos(ang)*5,
+dy:Math.sin(ang)*5,
+type:"fire"
+});
+
+}
+
+},1800);
+
+// LARGE SPREAD (đạn lan cực dày)
+
+setInterval(()=>{
+
+if(state!=="play" || timeStop || stage!==2) return;
+
+let base = Math.atan2(player.y-boss.y,player.x-boss.x);
+
+for(let i=-30;i<=30;i++){   // 61 viên
+
+let ang = base + i*0.05;
+
+fireBullets.push({
+x:boss.x,
+y:boss.y,
+dx:Math.cos(ang)*5,
+dy:Math.sin(ang)*5,
+type:"spread"
+});
+
+}
+
+},1800);
+
+
+setInterval(()=>{
+
+if(state!=="play" || timeStop || stage!==4) return;
+
+let base = Math.atan2(player.y-boss.y,player.x-boss.x);
+
+for(let i=-63;i<=63;i++){   // 126 viên
+
+let ang = base + i*0.05;
+
+fireBullets.push({
+x:boss.x,
+y:boss.y,
+dx:Math.cos(ang)*5,
+dy:Math.sin(ang)*5,
+type:"spread4"
+});
+
+}
+
+},5000);
+
+
+
+
+
+
+
+// ================= GAME LOOP =================
+
+let lastTime = 0;
+
+function game(currentTime){
+
+let delta = currentTime - lastTime;
+lastTime = currentTime;
+
+x.fillStyle="#030b1a";
+x.fillRect(0,0,c.width,c.height);
+
+if(state==="select"){
+
+x.fillStyle="white";
+x.font="30px Arial";
+x.fillText("SELECT CHARACTER",c.width/2-160,100);
+
+x.font="30px Arial";
+
+let y = c.height/2;
+
+x.drawImage(airiImg,c.width*1/12-60,y-80,120,160);
+x.fillText("Airi",c.width*1/12-30,y+120);
+
+x.drawImage(kuronaImg,c.width*3/12-60,y-80,120,160);
+x.fillText("Kurona",c.width*3/12-60,y+120);
+
+x.drawImage(midorihaImg,c.width*5/12-60,y-80,120,160);
+x.fillText("Midoriha",c.width*5/12-80,y+120);
+
+x.drawImage(kaizenImg,c.width*7/12-60,y-80,120,160);
+x.fillText("Kaizen",c.width*7/12-60,y+120);
+
+x.drawImage(cloudImg,c.width*9/12-60,y-80,120,160);
+x.fillText("Soraya",c.width*9/12-60,y+120);
+
+x.drawImage(yorukageImg,c.width*11/12-60,y-80,120,160);
+x.fillText("Yorukage",c.width*11/12-90,y+120);
+
+playerBullets = playerBullets.filter(b => b.y > -50 && b.y < c.height+50);
+enemyBullets = enemyBullets.filter(b => b.y > -50 && b.y < c.height+50);
+rainBullets = rainBullets.filter(b => b.y>-50 && b.y<c.height+50);
+bounceBullets = bounceBullets.filter(b => b.y < c.height+50);
+
+requestAnimationFrame(game);
+return;
+}
+
+
+
+
+
+// TIME STOP
+
+if(timeCD>0)timeCD-=delta;
+if(ballCD>0) ballCD-=delta;
+if(midorihaCD>0) midorihaCD-=delta;
+if(kaizenCD>0) kaizenCD-=delta;
+if(sorayaCD>0) sorayaCD-=delta;
+if(sorayaFly>0) sorayaFly-=delta;
+
+// EYE BULLET
+if(stage===3 && !timeStop){
+
+eyeCD -= delta;
+
+if(eyeCD <= 0){
+
+eyeBullets.push({
+x:boss.x,
+y:boss.y,
+time:12000
+});
+
+eyeCD = 30000;
+
+}
+
+}
+
+if(yorukageDuration > 0){
+
+yorukageDuration -= delta;
+yorukageRainTimer += delta;
+
+// bắn đạn từ dưới lên
+if(yorukageRainTimer >= 600){
+
+for(let i=0;i<4;i++){
+rainBullets.push({
+x:Math.random()*c.width,
+y:c.height,
+dy:-7 - Math.random()*3,
+yoru:true
+});
+}
+
+yorukageRainTimer = 0;
+
+}
+
+// hết skill
+
+if(yorukageDuration <= 0 && platforms.length === 0){
+
+for(let i=0;i<3;i++){
+platforms.push({
+x:Math.random()*(c.width-120),
+y:c.height-170
+});
+}
+
+if(selected===6){
+
+}
+
+}
+
+}
+
+// ================= EYE BULLET =================
+
+eyeBullets.forEach(e=>{
+
+if(!timeStop){
+
+let ang = Math.atan2(player.y - e.y , player.x - e.x);
+
+e.x += Math.cos(ang) * 2; // tốc độ chậm
+e.y += Math.sin(ang) * 2;
+
+e.time -= delta;
+
+}
+
+x.drawImage(eyeImg,e.x-25,e.y-25,50,50);
+
+// hết thời gian
+if(e.time <= 0){
+e.y = c.height + 100;
+}
+
+// collision
+if(Math.hypot(e.x-player.x,e.y-player.y) < player.r+10){
+
+if(!kaizenInvincible){
+player.hp -= 3*(selected===2?0.5:1);
+}
+
+e.y = c.height + 100;
+
+}
+
+});
+
+// xóa mắt hết hạn
+eyeBullets = eyeBullets.filter(e => e.y < c.height+50);
+
+// NUCLEAR BALL
+if(stage===4 && !timeStop){
+
+stage4BallCD -= delta;
+
+if(stage4BallCD <= 0){
+
+warningTimer = 2000; // hiện cảnh báo 2 giây
+
+for(let i=0;i<5;i++){
+
+enemyBullets.push({
+x:Math.random()*c.width,
+y:-20,
+dx:(Math.random()-0.5)*2,
+dy:5,
+nuclear:true
+});
+
+}
+
+stage4BallCD = 30000;
+
+}
+
+}
+
+// LASER
+if(stage>=3 && !timeStop){
+
+    laserCD -= delta;
+
+    if(laserCD <= 0){
+        lasers.push({warning:1000,time:3000});
+        laserCD = 10000;
+    }
+
+}
+
+// SPIKE TIMER
+
+if(stage>=3 && !timeStop){
+
+    spikeCD -= delta;
+
+    if(spikeCD <= 0){
+        spikeWarning = 1000;
+
+        platforms = [];
+
+        for(let i=0;i<3;i++){
+            platforms.push({
+                x:Math.random()*(c.width-120),
+                y:c.height-170
+            });
+        }
+
+        spikeCD = 20000;
+    }
+
+}
+
+if(kaizenInvincible){
+   kaizenInvincibleTime -= delta;
+   if(kaizenInvincibleTime <= 0){
+      kaizenInvincible = false;
+   }
+}
+
+// MIDORIHA PASSIVE REGEN
+if(selected===3 && player.hp > 0){
+    midorihaRegenTimer += delta;
+
+    if(midorihaRegenTimer >= 200){ // 0.2 giây
+        player.hp += 0.01;
+        if(player.hp > player.maxHp) player.hp = player.maxHp;
+        midorihaRegenTimer = 0;
+    }
+}
+
+if(timeDuration>0){
+timeDuration-=delta;
+}else{
+timeStop=false;
+}
+
+if(timeStop){
+x.fillStyle="rgba(150,150,150,0.3)";
+x.fillRect(0,0,c.width,c.height);
+}
+
+
+playerBullets = playerBullets.filter(b => b.y>-50 && b.y<c.height+50);
+enemyBullets = enemyBullets.filter(b =>
+b.x>-50 && b.x<c.width+50 &&
+b.y>-50 && b.y<c.height+50
+);
+rainBullets = rainBullets.filter(b => b.y<c.height+50);
+bounceBullets = bounceBullets.filter(b => b.y<c.height+50);
+fireBullets = fireBullets.filter(b => b.y>-50 && b.y<c.height+50);
+
+if(slowTimer > 0){
+slowTimer -= delta;
+player.speed = 3;
+}else{
+player.speed = 6;
+}
+
+// ===== JOYSTICK MOVEMENT =====
+
+// nếu lệch rất nhỏ thì coi như không di chuyển
+if(Math.abs(moveX) < 0.05){
+    player.vx = 0;
+}else{
+    player.vx = moveX * player.speed;
+}
+
+player.x += player.vx;
+
+// Yorukage passive teleport
+if(selected===6){
+
+if(player.x < 0){
+    player.x = c.width;
+}
+
+if(player.x > c.width){
+    player.x = 0;
+}
+
+}
+
+if(moveY < -0.5 && player.jump === 0 && !(selected===5 && sorayaFly>0)){
+player.vy = -18;
+player.jump = 1;
+}
+
+if(selected!==6){
+if(player.x<30)player.x=30;
+if(player.x>c.width-30)player.x=c.width-30;
+}
+
+
+
+
+
+// ================= GRAVITY + PLATFORM COLLISION =================
+
+gravity = selected===5 ? 0.6 : 0.8;
+
+if(selected===5 && sorayaFly>0){
+
+player.jump = 1;
+
+player.vy = moveY * 6;
+player.y += player.vy;
+
+}else{
+
+player.vy += gravity;
+player.y += player.vy;
+
+}
+
+let onPlatform=false;
+
+platforms.forEach(p=>{
+
+if(
+player.x>p.x-20 &&
+player.x<p.x+140 &&
+player.y+40>p.y &&
+player.y+40<p.y+20 &&
+player.vy>=0
+){
+player.y=p.y-40;
+player.vy=0;
+player.jump=0;
+onPlatform=true;
+}
+
+});
+
+if(player.y>c.height-120){
+player.y=c.height-120;
+player.vy=0;
+player.jump=0;
+}
+
+
+
+
+
+
+// ================= DRAW PLAYER =================
+
+if(selected===1) x.drawImage(airiImg,player.x-40,player.y-40,80,80);
+if(selected===2) x.drawImage(kuronaImg,player.x-40,player.y-40,80,80);
+if(selected===3) x.drawImage(midorihaImg,player.x-40,player.y-40,80,80);
+if(selected===4) x.drawImage(kaizenImg,player.x-40,player.y-40,80,80);
+if(selected===5) x.drawImage(cloudImg,player.x-40,player.y-40,80,80);
+if(selected===6) x.drawImage(yorukageImg,player.x-40,player.y-40,80,80);
+
+// KAIZEN AURA
+if(selected===4 && kaizenInvincible){
+
+// vòng ngoài
+x.strokeStyle="skyblue";
+x.lineWidth=6;
+x.beginPath();
+x.arc(player.x,player.y,60,0,Math.PI*2);
+x.stroke();
+
+// glow nhẹ
+x.fillStyle="rgba(135,206,235,0.15)";
+x.beginPath();
+x.arc(player.x,player.y,60,0,Math.PI*2);
+x.fill();
+
+}
+
+
+
+
+
+// ================= PLAYER BULLETS =================
+
+shootTimer += delta;
+
+let shootDelay = 400;
+
+if(selected===2 && timeStop){
+shootDelay = 133;
+}
+
+if(shootTimer >= shootDelay){
+
+shootTimer = 0;
+
+let dmg =
+selected===1 ? 2 :
+selected===4 ? 2 :
+selected===5 ? 2 :
+selected===6 ? 2 :
+1;
+
+let speed = 7;
+
+if(selected===2 && timeStop) speed = 18;
+
+let ang=Math.atan2(boss.y-player.y,boss.x-player.x);
+
+playerBullets.push({
+x:player.x,
+y:player.y,
+dx:Math.cos(ang)*speed,
+dy:Math.sin(ang)*speed,
+dmg:dmg
+});
+
+}
+
+x.fillStyle="cyan";
+
+playerBullets.forEach(b=>{
+
+if(!timeStop){
+b.x+=b.dx;
+b.y+=b.dy;
+}
+
+x.beginPath();
+x.arc(b.x,b.y,5,0,7);
+x.fill();
+
+if(Math.hypot(b.x-boss.x,b.y-boss.y)<60){
+boss.hp-=b.dmg;
+b.y=-100;
+}
+
+});
+
+
+
+
+
+
+// ================= AIRI ORB =================
+
+if(ball.active){
+
+if(!timeStop){
+ball.x+=ball.dx;
+ball.y+=ball.dy;
+}
+
+// nếu ra khỏi màn hình thì biến mất
+if(ball.x<0 || ball.x>c.width || ball.y<0 || ball.y>c.height){
+ball.active=false;
+}
+
+// chạm boss -> gây 10 damage và biến mất
+if(Math.hypot(ball.x-boss.x,ball.y-boss.y)<70){
+boss.hp-=10;
+ball.active=false;
+}
+
+// vẽ bóng nếu còn tồn tại
+if(ball.active){
+x.fillStyle="skyblue";
+x.beginPath();
+x.arc(ball.x,ball.y,12,0,7);
+x.fill();
+}
+
+}
+
+
+
+
+
+
+// ================= ENEMY BULLETS =================
+
+enemyBullets.forEach(b=>{
+
+if(!timeStop){
+b.x+=b.dx;
+b.y+=b.dy;
+}
+
+// NUCLEAR EXPLOSION (nổ giữa map)
+
+if(b.nuclear && b.y > c.height/2 && !b.exploded){
+
+b.exploded = true;
+
+// tạo vòng nổ
+for(let i=0;i<36;i++){
+
+let ang = i * (Math.PI*2/36);
+
+enemyBullets.push({
+x:b.x,
+y:b.y,
+dx:Math.cos(ang)*6,
+dy:Math.sin(ang)*6,
+nuclearExplosion:true
+});
+
+}
+
+// xoá quả cầu gốc
+b.y = c.height + 200;
+
+}
+
+if(b.nuclear){
+x.fillStyle="yellow";
+}else if(b.nuclearExplosion){
+x.fillStyle="yellow";
+}else if(b.blizzard){
+x.fillStyle="white";
+}else{
+x.fillStyle="orange";
+}
+
+x.beginPath();
+x.arc(b.x,b.y, b.nuclear ? 16 : 6 ,0,7);
+x.fill();
+
+if(Math.hypot(b.x-player.x,b.y-player.y)<player.r){
+
+if(!kaizenInvincible){
+
+if(b.nuclear){
+player.hp -= 72;
+}
+else if(b.nuclearExplosion){
+player.hp -= 2;
+}
+else{
+player.hp -= 1*(selected===2?0.5:1);
+}
+
+// burn chỉ kích hoạt khi trúng
+if(b.burn){
+
+let burnTime=10;
+
+let burnInterval=setInterval(()=>{
+
+player.hp-=0.1;
+
+burnTime--;
+
+if(burnTime<=0){
+clearInterval(burnInterval);
+
+}
+
+},100);
+
+}
+
+if(b.slow){
+slowTimer=1000;
+
+}
+
+b.y=c.height+100;
+
+}
+
+}
+
+});
+
+
+
+
+
+
+// ================= RAIN =================
+
+rainBullets.forEach(b=>{
+
+x.fillStyle = b.yoru ? "cyan" : "red";
+
+if(!timeStop){
+b.y+=b.dy;
+}
+
+x.beginPath();
+x.arc(b.x,b.y,6,0,7);
+x.fill();
+
+if(!b.yoru && Math.hypot(b.x-player.x,b.y-player.y)<player.r){
+    if(!kaizenInvincible){
+        player.hp-=1*(selected===2?0.5:1);
+    }
+    b.y=c.height+100;
+}
+
+});
+
+
+
+
+
+
+// ================= BOUNCE =================
+
+x.fillStyle="purple";
+
+bounceBullets.forEach(b=>{
+
+if(!timeStop){
+b.x+=b.dx;
+b.y+=b.dy;
+}
+
+if(b.y>c.height-10){
+b.dy*=-1;
+}
+
+x.beginPath();
+x.arc(b.x,b.y,8,0,7);
+x.fill();
+
+if(Math.hypot(b.x-player.x,b.y-player.y)<player.r){
+if(!kaizenInvincible){
+   player.hp-=1*(selected===2?0.5:1);
+}
+b.y=c.height+100;
+}
+
+});
+
+
+
+
+// ================= FIRE BULLETS =================
+fireBullets.forEach(b=>{
+
+if(!timeStop){
+b.x+=b.dx;
+b.y+=b.dy;
+}
+
+x.fillStyle="orange";
+
+x.beginPath();
+x.arc(b.x,b.y,7,0,7);
+x.fill();
+
+if(Math.hypot(b.x-player.x,b.y-player.y)<player.r){
+
+if(!kaizenInvincible){
+player.hp-=1*(selected===2?0.5:1);
+}
+
+b.y=c.height+100;
+}
+
+});
+
+
+
+// ================= LASER =================
+
+lasers.forEach(l=>{
+
+if(!timeStop){
+if(l.warning>0){
+l.warning-=delta;
+}else{
+l.time-=delta;
+}
+}
+
+if(l.warning>0){
+
+x.fillStyle="red";
+x.font="60px Arial";
+x.fillText("!",c.width/2-10,c.height/2);
+
+}else if(l.time>0){
+
+x.fillStyle="rgba(255,0,0,0.4)";
+x.fillRect(c.width/2-30,0,60,c.height);
+
+if(player.x>c.width/2-30 && player.x<c.width/2+30){
+
+laserDamageTimer += delta;
+
+if(laserDamageTimer >= 100){ // 0.1 giây
+
+if(!kaizenInvincible){
+player.hp -= 0.1*(selected===2?0.5:1);
+}
+
+laserDamageTimer = 0;
+
+}
+
+}else{
+laserDamageTimer = 0;
+}
+
+}
+
+});
+
+
+
+
+
+
+// ================= SPIKE =================
+
+if(!timeStop){
+
+if(spikeWarning>0){
+spikeWarning-=delta;
+if(spikeWarning<=0){
+spikeActive=true;
+spikeTimer=5000;
+}
+}
+
+if(spikeActive){
+spikeTimer-=delta;
+if(spikeTimer<=0){
+spikeActive=false;
+platforms=[];
+}
+}
+
+}
+
+if(spikeWarning>0){
+x.fillStyle="red";
+x.font="50px Arial";
+x.fillText("!",c.width/2-10,c.height-30);
+}
+
+if(spikeActive){
+
+x.fillStyle="red";
+x.fillRect(0,c.height-40,c.width,40);
+
+if(!onPlatform && player.y>c.height-140){
+
+spikeDamageTimer += delta;
+
+if(spikeDamageTimer >= 100){ // 0.1 giây
+
+if(!kaizenInvincible){
+player.hp -= 0.1*(selected===2?0.5:1);
+}
+
+spikeDamageTimer = 0;
+
+}
+
+}else{
+spikeDamageTimer = 0;
+}
+
+}
+
+
+
+
+
+
+// ================= DRAW PLATFORMS =================
+
+x.fillStyle="white";
+
+platforms.forEach(p=>{
+x.fillRect(p.x,p.y,120,12);
+});
+
+
+
+
+
+
+// ================= DRAW BOSS =================
+
+if(stage===1){
+x.drawImage(iceBossImg,boss.x-80,boss.y-80,160,160);
+}
+
+if(stage===2){
+x.drawImage(fireBossImg,boss.x-80,boss.y-80,160,160);
+}
+
+if(stage===3){
+x.drawImage(bossImg,boss.x-80,boss.y-80,160,160);
+}
+
+if(stage===4){
+x.drawImage(nuclearBossImg,boss.x-80,boss.y-80,160,160);
+}
+
+if(warningTimer > 0){
+
+warningTimer -= delta;
+
+x.fillStyle="red";
+x.font="80px Arial";
+x.textAlign="center";
+x.fillText("⚠ WARNING ⚠",c.width/2,c.height/2);
+
+x.textAlign="left";
+
+}
+
+
+
+// ================= UI =================
+
+x.fillStyle="white";
+x.font="20px Arial";
+x.fillText("HP: "+player.hp.toFixed(2)+"/"+player.maxHp,20,30);
+x.fillText("Boss HP: "+boss.hp,20,55);
+
+x.fillText("Stage: "+stage,20,80);
+
+
+
+
+
+// ===== DRAW JOYSTICK =====
+
+// vòng ngoài
+x.fillStyle = "rgba(255,255,255,0.2)";
+x.beginPath();
+x.arc(joystick.baseX, joystick.baseY, joystick.radius, 0, Math.PI*2);
+x.fill();
+
+// cần điều khiển
+x.fillStyle = "white";
+x.beginPath();
+x.arc(joystick.stickX, joystick.stickY, 25, 0, Math.PI*2);
+x.fill();
+
+
+
+// SKILL BUTTON
+let onCD = 
+(selected===1 && ballCD>0) ||
+(selected===2 && timeCD>0) ||
+(selected===3 && midorihaCD>0) ||
+(selected===4 && kaizenCD>0) ||
+(selected===5 && sorayaCD>0) ||
+(selected===6 && sorayaCD>0);
+
+x.fillStyle=onCD?"gray":"gold";
+x.beginPath();
+x.arc(c.width-120,c.height-120,60,0,7);
+x.fill();
+
+x.fillStyle="black";
+x.font="30px Arial";
+x.fillText("★",c.width-135,c.height-105);
+
+
+
+
+
+
+// ================= END =================
+
+if(player.hp<=0.01){
+player.hp = 0;
+x.font="50px Arial";
+x.fillStyle="red";
+x.fillText("GAME OVER",c.width/2-150,c.height/2);
+return;
+}
+
+if(boss.hp<=0 && stage===1){
+stage=2;
+boss.hp=350;
+boss.x=c.width/2;
+boss.y=150;
+}
+
+else if(boss.hp<=0 && stage===2){
+stage=3;
+boss.hp=500;
+boss.x=c.width/2;
+boss.y=150;
+}
+
+else if(boss.hp<=0 && stage===3){
+stage=4;
+boss.hp=800;
+boss.x=c.width/2;
+boss.y=150;
+}
+
+else if(boss.hp<=0 && stage===4){
+x.font="50px Arial";
+x.fillStyle="lime";
+x.fillText("YOU WIN",c.width/2-120,c.height/2);
+return;
+}
+
+requestAnimationFrame(game);
+}
+
+game();
+
+
+
+</script>
+
+</body>
+</html>
