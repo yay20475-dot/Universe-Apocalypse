@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Judgement Apocalypse: Evolved</title>
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        canvas { display: block; touch-action: none; }
+        #ui-overlay { position: fixed; top: 10px; left: 10px; color: white; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+
+<script>
+/** @type {HTMLCanvasElement} */
+const c = document.getElementById("c");
+const x = c.getContext("2d");
+
+// Cấu hình màn hình
+function resize() {
+    c.width = window.innerWidth;
+    c.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Trạng thái game
+let state = "select";
+let stage = 1;
+let score = 0;
+let shake = 0;
+
+// Hình ảnh (Sử dụng link của bạn và thêm fallback màu sắc)
+const loadImg = (src) => { const img = new Image(); img.src = src; return img; };
+const imgs = {
+    airi: loadImg("https://i.ibb.co/FbJ31Yvv/image.png"),
+    kurona: loadImg("https://i.ibb.co/0pQ7qdMQ/image.png"),
+    midoriha: loadImg("https://i.ibb.co/svJyhVZK/image.png"),
+    kaizen: loadImg("https://i.ibb.co/6RTXvP9x/image.png"),
+    soraya: loadImg("https://i.ibb.co/9HKmV3k9/image.png"),
+    yorukage: loadImg("https://i.ibb.co/PvFh1sWq/image.png"),
+    hoshika: loadImg("https://i.ibb.co/21Tvn7Ph/image.png"),
+    boss1: loadImg("https://i.ibb.co/VWS48MBJ/image.png"), // Ice
+    boss2: loadImg("https://i.ibb.co/8L1x7STR/image.png"), // Fire
+    boss3: loadImg("https://i.ibb.co/N2KzGczJ/image.png"), // Magic
+    boss4: loadImg("https://i.ibb.co/S4W3Lvh3/image.png")  // Nuclear
+};
+
+// Đối tượng Player
+const player = {
+    x: 0, y: 0, r: 15, hp: 10, maxHp: 10, 
+    speed: 6, selected: 0, skillCD: 0, 
+    invincible: 0, shield: false
+};
+
+const boss = {
+    x: c.width/2, y: 100, hp: 1000, maxHp: 1000, 
+    size: 60, angle: 0, targetX: c.width/2
+};
+
+// Mảng quản lý đạn và hiệu ứng
+let pBullets = [];
+let eBullets = [];
+let particles = [];
+
+// Điều khiển
+let joystick = { active: false, bx: 120, by: 0, sx: 120, sy: 0, r: 60, vx: 0, vy: 0 };
+joystick.by = c.height - 120;
+joystick.sy = c.height - 120;
+
+// Xử lý sự kiện
+const getDist = (x1, y1, x2, y2) => Math.hypot(x1 - x2, y1 - y2);
+
+c.addEventListener("pointerdown", e => {
+    const tx = e.clientX, ty = e.clientY;
+    
+    if(state === "select") {
+        const sector = c.width / 7;
+        player.selected = Math.floor(tx / sector) + 1;
+        initGame();
+        state = "play";
+        return;
+    }
+
+    // Nút Skill (Góc dưới bên phải)
+    if(getDist(tx, ty, c.width - 80, c.height - 80) < 50) {
+        useSkill();
+        return;
+    }
+
+    // Joystick
+    if(getDist(tx, ty, joystick.bx, joystick.by) < joystick.r * 1.5) {
+        joystick.active = true;
+    }
+});
+
+c.addEventListener("pointermove", e => {
+    if(!joystick.active) return;
+    const dx = e.clientX - joystick.bx;
+    const dy = e.clientY - joystick.by;
+    const dist = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx);
+    const moveDist = Math.min(dist, joystick.r);
+    
+    joystick.sx = joystick.bx + Math.cos(angle) * moveDist;
+    joystick.sy = joystick.by + Math.sin(angle) * moveDist;
+    joystick.vx = Math.cos(angle) * (moveDist / joystick.r);
+    joystick.vy = Math.sin(angle) * (moveDist / joystick.r);
+});
+
+window.addEventListener("pointerup", () => {
+    joystick.active = false;
+    joystick.sx = joystick.bx;
+    joystick.sy = joystick.by;
+    joystick.vx = 0; joystick.vy = 0;
+});
+
+function initGame() {
+    player.x = c.width / 2;
+    player.y = c.height - 150;
+    player.hp = player.selected === 4 ? 20 : 10;
+    player.maxHp = player.hp;
+    boss.hp = 1000;
+}
+
+function useSkill() {
+    if(player.skillCD > 0) return;
+    
+    switch(player.selected) {
+        case 1: // Airi: Mega Blast
+            pBullets.push({x: player.x, y: player.y, r: 40, power: 50, vy: -10, color: 'cyan'});
+            player.skillCD = 200; break;
+        case 2: // Kurona: Time Stop
+            boss.frozen = 180; 
+            player.skillCD = 600; break;
+        case 3: // Midoriha: Heal
+            player.hp = Math.min(player.maxHp, player.hp + 4);
+            player.skillCD = 500; break;
+        case 4: // Kaizen: Shield
+            player.invincible = 300;
+            player.skillCD = 400; break;
+        default: player.skillCD = 100;
+    }
+}
+
+// Logic vòng lặp game
+function update() {
+    if(state !== "play") return;
+
+    // Di chuyển player
+    player.x += joystick.vx * player.speed;
+    player.y += joystick.vy * player.speed;
+    player.x = Math.max(player.r, Math.min(c.width - player.r, player.x));
+    player.y = Math.max(player.r, Math.min(c.height - player.r, player.y));
+
+    if(player.skillCD > 0) player.skillCD--;
+    if(player.invincible > 0) player.invincible--;
+    if(boss.frozen > 0) boss.frozen--;
+
+    // Update Boss
+    if(!boss.frozen) {
+        boss.x += (boss.targetX - boss.x) * 0.05;
+        if(Math.random() < 0.02) boss.targetX = Math.random() * (c.width - 100) + 50;
+        boss.angle += 0.05;
+        
+        // Bắn đạn theo Stage
+        if(frameCount % (20 - stage * 2) === 0) {
+            spawnBossBullet();
+        }
+    }
+
+    // Xử lý Stage
+    stage = 4 - Math.floor((boss.hp / boss.maxHp) * 4);
+    stage = Math.max(1, Math.min(4, stage));
+
+    // Player tự động bắn
+    if(frameCount % 10 === 0) {
+        pBullets.push({x: player.x, y: player.y, r: 5, vy: -12, power: 2});
+    }
+
+    // Xử lý đạn player
+    pBullets.forEach((b, i) => {
+        b.y += b.vy || 0;
+        if(getDist(b.x, b.y, boss.x, boss.y) < boss.size) {
+            boss.hp -= b.power;
+            pBullets.splice(i, 1);
+            shake = 5;
+        }
+        if(b.y < -50) pBullets.splice(i, 1);
+    });
+
+    // Xử lý đạn boss
+    eBullets.forEach((b, i) => {
+        b.x += b.vx; b.y += b.vy;
+        if(getDist(b.x, b.y, player.x, player.y) < player.r && !player.invincible) {
+            player.hp--;
+            player.invincible = 60;
+            eBullets.splice(i, 1);
+            shake = 15;
+        }
+        if(b.y > c.height + 50 || b.x < -50 || b.x > c.width + 50) eBullets.splice(i, 1);
+    });
+
+    if(player.hp <= 0) state = "over";
+    if(boss.hp <= 0) state = "win";
+}
+
+function spawnBossBullet() {
+    const ang = Math.atan2(player.y - boss.y, player.x - boss.x);
+    if(stage === 1) { // Ice: Bắn tia
+        eBullets.push({x: boss.x, y: boss.y, vx: Math.cos(ang)*5, vy: Math.sin(ang)*5, color: '#8cf'});
+    } else if(stage === 2) { // Fire: Bắn tỏa
+        for(let i=-1; i<=1; i++) 
+            eBullets.push({x: boss.x, y: boss.y, vx: Math.cos(ang+i*0.3)*6, vy: Math.sin(ang+i*0.3)*6, color: '#f50'});
+    } else { // Nuclear: Đạn đuổi nhẹ
+        eBullets.push({x: boss.x, y: boss.y, vx: Math.cos(ang)*4, vy: Math.sin(ang)*4, color: '#0f0'});
+    }
+}
+
+let frameCount = 0;
+function draw() {
+    frameCount++;
+    update();
+    
+    // Hiệu ứng rung
+    let sx = 0, sy = 0;
+    if(shake > 0) {
+        sx = (Math.random()-0.5)*shake;
+        sy = (Math.random()-0.5)*shake;
+        shake *= 0.9;
+    }
+
+    x.clearRect(0,0,c.width,c.height);
+    x.save();
+    x.translate(sx, sy);
+
+    if(state === "select") {
+        drawSelectScreen();
+    } else {
+        drawGame();
+    }
+    
+    x.restore();
+    requestAnimationFrame(draw);
+}
+
+function drawSelectScreen() {
+    x.fillStyle = "white";
+    x.font = "bold 40px Arial";
+    x.textAlign = "center";
+    x.fillText("CHỌN CHIẾN BINH", c.width/2, 100);
+    
+    const chars = ["Airi", "Kurona", "Midoriha", "Kaizen", "Soraya", "Yorukage", "Hoshika"];
+    const imgKeys = ["airi", "kurona", "midoriha", "kaizen", "soraya", "yorukage", "hoshika"];
+    const sector = c.width / 7;
+    
+    chars.forEach((name, i) => {
+        const img = imgs[imgKeys[i]];
+        x.drawImage(img, i*sector + 10, c.height/2 - 100, sector - 20, 200);
+        x.font = "16px Arial";
+        x.fillText(name, i*sector + sector/2, c.height/2 + 130);
+    });
+}
+
+function drawGame() {
+    // Vẽ Boss
+    const bossImg = imgs[`boss${stage}`] || imgs.boss1;
+    x.save();
+    x.translate(boss.x, boss.y);
+    if(boss.frozen) x.filter = "grayscale(100%) brightness(2)";
+    x.rotate(Math.sin(frameCount*0.05)*0.2);
+    x.drawImage(bossImg, -boss.size, -boss.size, boss.size*2, boss.size*2);
+    x.restore();
+
+    // Thanh máu Boss
+    x.fillStyle = "#300";
+    x.fillRect(c.width/2 - 200, 30, 400, 10);
+    x.fillStyle = "#f00";
+    x.fillRect(c.width/2 - 200, 30, (boss.hp/boss.maxHp) * 400, 10);
+
+    // Vẽ Player
+    x.save();
+    if(player.invincible % 4 > 2) x.globalAlpha = 0.3;
+    const pImg = imgs[Object.keys(imgs)[player.selected-1]];
+    x.drawImage(pImg, player.x - 25, player.y - 35, 50, 70);
+    x.restore();
+
+    // Đạn
+    pBullets.forEach(b => {
+        x.fillStyle = b.color || "yellow";
+        x.beginPath(); x.arc(b.x, b.y, b.r, 0, 7); x.fill();
+    });
+    
+    eBullets.forEach(b => {
+        x.fillStyle = b.color || "red";
+        x.beginPath(); x.arc(b.x, b.y, 6, 0, 7); x.fill();
+    });
+
+    // UI điều khiển
+    // Joystick Base
+    x.globalAlpha = 0.3;
+    x.fillStyle = "white";
+    x.beginPath(); x.arc(joystick.bx, joystick.by, joystick.r, 0, 7); x.fill();
+    x.beginPath(); x.arc(joystick.sx, joystick.sy, 30, 0, 7); x.fill();
+    
+    // Nút Skill
+    x.beginPath(); x.arc(c.width - 80, c.height - 80, 50, 0, 7); x.stroke();
+    x.globalAlpha = player.skillCD > 0 ? 0.2 : 0.8;
+    x.fill();
+    x.globalAlpha = 1;
+    x.fillStyle = "white";
+    x.textAlign = "center";
+    x.fillText(player.skillCD > 0 ? Math.ceil(player.skillCD/60) : "SKILL", c.width - 80, c.height - 75);
+
+    // Máu Player
+    x.textAlign = "left";
+    x.font = "20px Arial";
+    x.fillText("HP: " + "❤️".repeat(player.hp), 20, 40);
+}
+
+draw();
+</script>
+</body>
+</html>
