@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Judgement Apocalypse - Remastered</title>
+<style>
+    @import url('https://fonts.googleapis.com');
+    html,body{ margin:0; padding:0; overflow:hidden; background:#000; touch-action:none; font-family: 'Orbitron', sans-serif; }
+    canvas{ display:block; position:fixed; top:0; left:0; filter: contrast(1.1); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+let c=document.getElementById("c");
+let x=c.getContext("2d");
+c.width=innerWidth;
+c.height=innerHeight;
+
+let state="select";
+let stage = 1;
+let selected=0;
+let shake = 0;
+
+// --- Load Images (Giữ nguyên link gốc của bạn) ---
+const imgUrls = {
+    airi: "https://i.ibb.co",
+    kurona: "https://i.ibb.co",
+    midoriha: "https://i.ibb.co",
+    kaizen: "https://i.ibb.co",
+    cloud: "https://i.ibb.co",
+    yorukage: "https://i.ibb.co",
+    hoshika: "https://i.ibb.co",
+    boss1: "https://i.ibb.co",
+    boss2: "https://i.ibb.co",
+    boss3: "https://i.ibb.co",
+    boss4: "https://i.ibb.co"
+};
+const imgs = {};
+for(let key in imgUrls){ imgs[key] = new Image(); imgs[key].src = imgUrls[key]; }
+
+// --- Player & Boss Logic ---
+let player={ x:c.width/2, y:c.height-120, hp:10, maxHp: 10, r:15, speed:7, baseDam: 2 };
+let boss={ x:c.width/2, y:150, hp:500, maxHp: 500, targetX: c.width/2 };
+
+let playerBullets=[];
+let enemyBullets=[];
+let timeStop=false, timeDuration=0, timeCD=0;
+let kaizenInvincible=false, kaizenCD=0;
+let ball={active:false, x:0, y:0, dx:0, dy:0}, ballCD=0;
+let midorihaCD=0;
+
+// Joystick
+let joystick = { active: false, baseX: 150, baseY: c.height - 150, stickX: 150, stickY: c.height - 150, radius: 80 };
+let moveX = 0;
+
+// --- Input Handling ---
+c.addEventListener("pointerdown", e => {
+    let tx = e.clientX, ty = e.clientY;
+    if(state==="select"){
+        let slot = Math.floor(tx / (c.width/7)) + 1;
+        selected = slot;
+        // Thiết lập Damage Shot & Passive
+        player.baseDam = (selected === 2 || selected === 3) ? 1 : 2; 
+        player.maxHp = (selected === 4) ? 15 : 10;
+        player.hp = player.maxHp;
+        state="play";
+        return;
+    }
+    if(Math.hypot(tx - joystick.baseX, ty - joystick.baseY) < 100) joystick.active = true;
+    // Skill Button
+    if(Math.hypot(tx-(c.width-120),ty-(c.height-120))<60) triggerSkill();
+});
+
+c.addEventListener("pointermove", e => {
+    if(!joystick.active) return;
+    let dx = e.clientX - joystick.baseX, dy = e.clientY - joystick.baseY;
+    let dist = Math.hypot(dx, dy);
+    if(dist > joystick.radius){ dx *= joystick.radius/dist; dy *= joystick.radius/dist; }
+    joystick.stickX = joystick.baseX + dx; joystick.stickY = joystick.baseY + dy;
+    moveX = dx / joystick.radius;
+});
+
+c.addEventListener("pointerup", () => { 
+    joystick.active = false; joystick.stickX = joystick.baseX; joystick.stickY = joystick.baseY; moveX = 0; 
+});
+
+function triggerSkill(){
+    if(selected===1 && ballCD<=0){ ball.active=true; ball.x=player.x; ball.y=player.y; let ang=Math.atan2(boss.y-player.y, boss.x-player.x); ball.dx=Math.cos(ang)*12; ball.dy=Math.sin(ang)*12; ballCD=400; }
+    if(selected===2 && timeCD<=0){ timeStop=true; timeDuration=120; timeCD=600; }
+    if(selected===3 && midorihaCD<=0){ player.hp = Math.min(player.maxHp, player.hp+3); midorihaCD=1000; }
+    if(selected===4 && kaizenCD<=0){ kaizenInvincible=true; timeDuration=180; kaizenCD=900; }
+}
+
+// --- Game Loop ---
+function loop(){
+    // Background & Shake
+    x.fillStyle="#050510"; x.fillRect(0,0,c.width,c.height);
+    if(shake > 0){ x.translate(Math.random()*shake - shake/2, Math.random()*shake - shake/2); shake *= 0.9; }
+
+    if(state==="select") drawSelect();
+    else drawPlay();
+
+    x.setTransform(1,0,0,1,0,0);
+    requestAnimationFrame(loop);
+}
+
+function drawSelect(){
+    let w = c.width/7;
+    const names = ["Airi","Kurona","Midoriha","Kaizen","Soraya","Yorukage","Hoshika"];
+    for(let i=0; i<7; i++){
+        let tx = i*w;
+        x.strokeStyle="rgba(255,255,255,0.1)"; x.strokeRect(tx,0,w,c.height);
+        x.fillStyle="white"; x.textAlign="center"; x.font="14px Orbitron";
+        x.fillText(names[i], tx+w/2, c.height/2 + 100);
+        x.font="10px Arial";
+        x.fillStyle=(i+1===2 || i+1===3)?"#aaa":"#ff4d4d";
+        x.fillText("DAM: " + ((i+1===2 || i+1===3)?1:2), tx+w/2, c.height/2 + 120);
+    }
+    x.fillStyle="cyan"; x.font="30px Orbitron"; x.fillText("SELECT YOUR HERO", c.width/2, 100);
+}
+
+function drawPlay(){
+    // Update Stage
+    if(boss.hp < 100) stage=4; else if(boss.hp < 250) stage=3; else if(boss.hp < 400) stage=2;
+
+    // Boss & Player
+    x.drawImage(imgs[`boss${stage}`], boss.x-60, boss.y-60, 120, 120);
+    if(kaizenInvincible) x.globalAlpha = 0.5;
+    let pKey = ["airi","kurona","midoriha","kaizen","soraya","yorukage","hoshika"][selected-1];
+    x.drawImage(imgs[pKey], player.x-25, player.y-35, 50, 70);
+    x.globalAlpha = 1;
+
+    // Movement & Timers
+    player.x += moveX * player.speed;
+    if(!timeStop){
+        boss.x += (boss.targetX - boss.x) * 0.02;
+        if(Math.abs(boss.x - boss.targetX) < 10) boss.targetX = Math.random()*(c.width-200)+100;
+        if(Math.random() < 0.04) enemyBullets.push({x:boss.x, y:boss.y, dx:(Math.random()-0.5)*10, dy:6});
+    } else { timeDuration--; if(timeDuration<=0) timeStop=false; }
+    
+    if(kaizenInvincible){ timeDuration--; if(timeDuration<=0) kaizenInvincible=false; }
+    if(ballCD > 0) ballCD--; if(timeCD > 0) timeCD--; if(midorihaCD > 0) midorihaCD--; if(kaizenCD > 0) kaizenCD--;
+
+    // Bullets Logic
+    if(Date.now()%150 < 20) playerBullets.push({x:player.x, y:player.y-20});
+    playerBullets.forEach((b,i)=>{
+        b.y -= 10; x.fillStyle="yellow"; x.fillRect(b.x-2, b.y, 4, 15);
+        if(Math.hypot(b.x-boss.x, b.y-boss.y) < 50){ boss.hp -= player.baseDam; playerBullets.splice(i,1); shake=3; }
+    });
+
+    enemyBullets.forEach((b,i)=>{
+        b.x += b.dx; b.y += b.dy;
+        x.fillStyle="#ff0066"; x.beginPath(); x.arc(b.x,b.y,6,0,7); x.fill();
+        if(Math.hypot(b.x-player.x, b.y-player.y) < 20){
+            if(!kaizenInvincible){
+                // PASSIVE KURONA: Giảm 50% dam (nhận 0.5 thay vì 1)
+                player.hp -= (selected === 2) ? 0.5 : 1;
+                shake = 15;
+            }
+            enemyBullets.splice(i,1);
+        }
+    });
+
+    // UI HUD
+    x.fillStyle="#111"; x.fillRect(c.width/2-200, 40, 400, 15);
+    x.fillStyle="red"; x.fillRect(c.width/2-200, 40, (boss.hp/boss.maxHp)*400, 15);
+    x.fillStyle="white"; x.font="12px Orbitron"; x.fillText("JUDGEMENT BOSS", c.width/2, 35);
+
+    // HP Player
+    for(let i=0; i<player.maxHp; i++){
+        x.fillStyle = (i < player.hp) ? "#00ff88" : "#333";
+        x.fillRect(30 + i*22, c.height-40, 18, 8);
+    }
+
+    // Joystick & Skill Button
+    x.beginPath(); x.arc(joystick.baseX, joystick.baseY, joystick.radius, 0, 7); x.strokeStyle="rgba(255,255,255,0.2)"; x.stroke();
+    x.beginPath(); x.arc(joystick.stickX, joystick.stickY, 30, 0, 7); x.fillStyle="rgba(255,255,255,0.4)"; x.fill();
+    
+    x.beginPath(); x.arc(c.width-120, c.height-120, 55, 0, 7); x.strokeStyle="white"; x.lineWidth=3; x.stroke();
+    x.fillStyle="white"; x.fillText("SKILL", c.width-120, c.height-115);
+}
+
+loop();
+</script>
+</body>
+</html>
